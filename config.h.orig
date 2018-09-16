@@ -1,0 +1,16 @@
+#ifndef CONFIG_H
+#define CONFIG_H
+
+// This is for logging in
+// You definitely need to edit these
+#define USERNAME "account[_subaccount]"
+#define PASSWORD "t0p 5Ecret ba$swerd"
+#define REALM    "someserver.voip.ms"
+
+// this is for registering your account
+// You probably don't need to edit these
+#define ACCOUNT_ID "sip:" USERNAME "@" REALM
+#define REGISTER_URI "sip:" REALM
+
+#endif // CONFIG_H
+

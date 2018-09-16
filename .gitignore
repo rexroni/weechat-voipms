@@ -1,0 +1,3 @@
+*.o
+voipms.so
+config.h
