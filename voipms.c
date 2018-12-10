@@ -7,6 +7,7 @@
 #include "voipms.h"
 #include "buffers.h"
 #include "sip_client.h"
+#include "history.h"
 
 WEECHAT_PLUGIN_NAME("voipms")
 WEECHAT_PLUGIN_DESCRIPTION("send and receive sms from your voip.ms account")
