@@ -22,11 +22,11 @@ struct buffers {
 struct buffers sip_buffers;
 
 void sip_buffers_init(void){
-    return;
     sip_buffers.buffers = NULL;
     sip_buffers.contacts = NULL;
     sip_buffers.len = 0;
     sip_buffers.maxlen = 0;
+    return;
 }
 
 int sip_buffers_allocate(void){
@@ -112,6 +112,7 @@ char* dup_only_phone_number(const char* contact){
     size_t len = strlen(contact);
 
     // regex needs a null-terminated string, so we will put it in out
+    /* TODO: no... this step is unnecessary and therefore a bit confusing */
     out = malloc(len + 1);
     if(!out) goto fail;
     memcpy(out, contact, len);
@@ -128,7 +129,6 @@ char* dup_only_phone_number(const char* contact){
         out[10] = '\0';
     }
     regfree(&reg);
-    // if it can't do it, try and just create a new buffer
     return out;
 fail:
     if(out) free(out);

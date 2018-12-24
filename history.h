@@ -28,9 +28,13 @@ void free_hist_buf(hist_buf_t *hist);
 void free_hist_msg(hist_msg_t *msg);
 
 // get a linked list of all the available buffer history files
-int list_hist_bufs(const char* voipms_dir, hist_buf_t **out);
+int list_hist_bufs(const char* wc_dir, hist_buf_t **out);
 
 // get a linked list of messages from a history file
-int get_hist_msg(const char* voipms_dir, hist_buf_t *buf, hist_msg_t **out);
+int get_hist_msg(const char* wc_dir, const char* fname, hist_msg_t **out);
+
+// add a message to the history
+int hist_add_msg(const char* wc_dir, const char* contact, size_t contact_len,
+                 const char* msg, size_t msg_len, bool me);
 
 #endif // HISTORY_H

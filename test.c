@@ -9,10 +9,27 @@ int main(){
     hist_buf_t *hist = NULL;
     hist_msg_t *msg = NULL;
 
+    // add a message to a file
+    int ret = hist_add_msg("testfiles", "1234567890", 10, "my added msg", 12, true);
+    if(ret){
+        perror("hist_add_msg");
+        printf("ret %d\n", ret);
+        goto fail;
+    }
+
+    ret = hist_add_msg("testfiles", "1234567890", 10, "their added msg", 15, false);
+    if(ret){
+        perror("hist_add_msg");
+        printf("ret %d\n", ret);
+        goto fail;
+    }
+
+
     // get all history buffers
-    int ret = list_hist_bufs("testfiles", &hist);
+    ret = list_hist_bufs("testfiles", &hist);
     if(ret){
         perror("list_hist_bufs");
+        printf("ret %d\n", ret);
         goto fail;
     }
 
@@ -22,7 +39,7 @@ int main(){
         printf("  %s:%s\n", p->contact, p->name);
         // get all messages in this buffer
         hist_msg_t *msg;
-        ret = get_hist_msg("testfiles", p, &msg);
+        ret = get_hist_msg("testfiles", p->filename, &msg);
         if(ret){
             printf("%d\n", ret);
             perror("get_hist_msg");

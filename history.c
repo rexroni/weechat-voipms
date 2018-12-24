@@ -8,10 +8,13 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <errno.h>
+#include <time.h>
 
 #include "history.h"
 
-#define OPEN_FLAGS O_RDONLY | O_DIRECTORY | O_CLOEXEC
+#define OPENDIR_FLAGS O_RDONLY | O_DIRECTORY | O_CLOEXEC
+#define OPEN_RD_FLAGS O_RDONLY | O_CLOEXEC
+#define OPEN_WR_FLAGS O_WRONLY | O_APPEND | O_CLOEXEC | O_CREAT , 0666
 
 #define FAIL(n) { retval = n; goto fail; }
 
@@ -38,12 +41,63 @@ void free_hist_msg(hist_msg_t *msg){
 }
 
 
-// get a linked list of all the available buffer history files
-int list_hist_bufs(const char* voipms_dir, hist_buf_t **out){
+/* returns a file descriptor at hdir_fd if hdir_fd is not NULL,
+   otherwise returns a DIR* at hdir */
+static int open_hist_dir(const char* wc_dir, int *hdir_fd, DIR **hdir){
+    // .weechat directory (file descriptor)
+    int wdir_fd = -1;
     // .weechat/voipms directory (file descriptor)
     int vdir_fd = -1;
     // .weechat/voipms/history directory (file descriptor)
-    int hdir_fd = -1;
+    int hdir_fd_temp = -1;
+    // return values
+    if(hdir_fd) *hdir_fd = -1;
+    if(hdir) *hdir = NULL;
+    int retval = -1;
+
+    // (mkdir and) open the weechat dir
+    wdir_fd = open(wc_dir, OPENDIR_FLAGS);
+    if(wdir_fd < 0) FAIL(1);
+
+    // attempt to make the directory, ignoring errors
+    mkdirat(wdir_fd, "voipms", 0777);
+    errno = 0;
+
+    // open the history directory
+    vdir_fd = openat(wdir_fd, "voipms", OPENDIR_FLAGS);
+    if(vdir_fd < 0) FAIL(2);
+
+    // attempt to make the directory, ignoring errors
+    mkdirat(vdir_fd, "history", 0777);
+    errno = 0;
+
+    // open the history directory
+    hdir_fd_temp = openat(vdir_fd, "history", OPENDIR_FLAGS);
+    if(hdir_fd < 0) FAIL(3);
+
+    // if hdir is not NULL, make a DIR* out of the hdir_fd
+    if(hdir_fd){
+        *hdir_fd = hdir_fd_temp;
+    }else{
+        *hdir = fdopendir(hdir_fd_temp);
+        if(!*hdir) FAIL(4);
+        // don't use hdir_fd_temp anymore
+        hdir_fd_temp = -1;
+    }
+
+    // success!
+    retval = 0;
+
+fail:
+    if(wdir_fd >= 0) close(wdir_fd);
+    if(vdir_fd >= 0) close(vdir_fd);
+    if(retval != 0 && hdir_fd_temp >= 0) close(hdir_fd_temp);
+    return retval;
+}
+
+
+// get a linked list of all the available buffer history files
+int list_hist_bufs(const char* wc_dir, hist_buf_t **out){
     // history directory
     DIR* hdir = NULL;
     // a temporary history entry
@@ -55,23 +109,12 @@ int list_hist_bufs(const char* voipms_dir, hist_buf_t **out){
     int retval = -1; // indicate error if we return early
     *out = NULL;
 
-    // (mkdir and) open the voipms_dir
-    vdir_fd = open(voipms_dir, OPEN_FLAGS, 0777);
-    if(vdir_fd < 0) FAIL(1);
-
-    // open the history directory
-    hdir_fd = openat(vdir_fd, "history", OPEN_FLAGS, 0777);
-    if(hdir_fd < 0) FAIL(2);
-
-    // make a DIR* out of the hdir_fd
-    hdir = fdopendir(hdir_fd);
-    if(!hdir) FAIL(3);
-    // don't use hdir_fd anymore
-    hdir_fd = -1;
+    int ret = open_hist_dir(wc_dir, NULL, &hdir);
+    if(ret) FAIL(4);
 
     // prepare the regex for pattern matching
-    int ret = regcomp(&reg, "(.+):(.*)", REG_EXTENDED);
-    if(ret) FAIL(4);
+    ret = regcomp(&reg, "(.+):(.*)", REG_EXTENDED);
+    if(ret) FAIL(5);
     regex_allocated = true;
 
     struct dirent* entry;
@@ -90,24 +133,24 @@ int list_hist_bufs(const char* voipms_dir, hist_buf_t **out){
 
         // allocate a new hist_buf_t entry
         hist_buf_t *hist = malloc(sizeof(*hist));
-        if(!hist) FAIL(5);
+        if(!hist) FAIL(6);
 
         // init the hist_buf_t
         *hist = (hist_buf_t){0};
 
         // duplicate the filename
         hist->filename = strdup(entry->d_name);
-        if(!hist->filename) FAIL(6);
+        if(!hist->filename) FAIL(7);
 
         // duplicate the contact name
         // TODO: do all libc implementations add a null byte to this?
         hist->contact = strndup(entry->d_name, match[1].rm_eo);
-        if(!hist->contact) FAIL(7);
+        if(!hist->contact) FAIL(8);
 
         // duplicate the buffer name (contact's user-readable name)
         if(match[2].rm_eo - match[2].rm_so > 0){
             hist->name = strdup(entry->d_name + match[2].rm_so);
-            if(!hist->name) FAIL(8);
+            if(!hist->name) FAIL(9);
         }
 
         // store it at the end of the linked list
@@ -120,21 +163,17 @@ int list_hist_bufs(const char* voipms_dir, hist_buf_t **out){
     retval = 0;
 
 fail:
-    if(vdir_fd >= 0) close(vdir_fd);
-    if(hdir_fd >= 0) close(hdir_fd);
     if(hdir) closedir(hdir);
     if(regex_allocated) regfree(&reg);
     free_hist_buf(hist);
     // free *out, but only if we are about to return an error
-    if(retval != 0) free_hist_buf(*out);
+    if(retval != 0 && *out) free_hist_buf(*out);
     return retval;
 }
 
 
 // get a message history from a buffer history
-int get_hist_msg(const char* voipms_dir, hist_buf_t *buf, hist_msg_t **out){
-    // .weechat/voipms directory (file descriptor)
-    int vdir_fd = -1;
+int get_hist_msg(const char* wc_dir, const char* fname, hist_msg_t **out){
     // .weechat/voipms/history directory (file descriptor)
     int hdir_fd = -1;
     // message file
@@ -147,17 +186,12 @@ int get_hist_msg(const char* voipms_dir, hist_buf_t *buf, hist_msg_t **out){
     int retval = -1;
     *out = NULL;
 
-    // (mkdir and) open the voipms_dir
-    vdir_fd = open(voipms_dir, OPEN_FLAGS, 0777);
-    if(vdir_fd < 0) FAIL(1);
-
-    // open the history directory
-    hdir_fd = openat(vdir_fd, "history", OPEN_FLAGS, 0777);
-    if(hdir_fd < 0) FAIL(2);
+    int ret = open_hist_dir(wc_dir, &hdir_fd, NULL);
+    if(ret) FAIL(3);
 
     // open the message file
-    msg_fd = openat(hdir_fd, buf->filename, O_RDONLY, 0777);
-    if(msg_fd < 0) FAIL(3);
+    msg_fd = openat(hdir_fd, fname, OPEN_RD_FLAGS);
+    if(msg_fd < 0) FAIL(4);
 
     // read the entire file into memory
     size_t msize = 8192;
@@ -248,7 +282,6 @@ int get_hist_msg(const char* voipms_dir, hist_buf_t *buf, hist_msg_t **out){
     retval = 0;
 
 fail:
-    if(vdir_fd >= 0) close(vdir_fd);
     if(hdir_fd >= 0) close(hdir_fd);
     if(msg_fd >= 0) close(msg_fd);
     if(mem) free(mem);
@@ -257,3 +290,93 @@ fail:
     if(retval) free_hist_msg(*out);
     return retval;
 }
+
+static int hist_file_from_contact(const char *wc_dir, const char *contact,
+                                  size_t contact_len, char **fname){
+    // history directory
+    DIR* hdir = NULL;
+    // return values
+    int retval = -1; // indicate error if we return early
+    *fname = NULL;
+
+    int ret = open_hist_dir(wc_dir, NULL, &hdir);
+    if(ret) FAIL(3);
+
+    struct dirent* entry;
+
+    while( (entry = readdir(hdir)) ){
+        // skip directories
+        if(entry->d_type == DT_DIR) continue;
+
+        // check if this file is for the contact
+        int ret = strncmp(entry->d_name, contact, contact_len);
+        if(ret != 0) continue;
+
+        // make sure that we matched to the full filename
+        if(entry->d_name[contact_len] != ':') continue;
+
+        // copy filename
+        *fname = strdup(entry->d_name);
+        if(!fname) FAIL(4)
+    }
+
+    retval = 0;
+
+fail:
+    if(hdir) closedir(hdir);
+    // free *fname, but only if we are about to return an error
+    if(retval != 0 && fname) free(*fname);
+    return retval;
+}
+
+
+// add a message to the history
+int hist_add_msg(const char* wc_dir, const char* contact, size_t contact_len,
+                 const char* msg, size_t msg_len, bool me){
+    // filename of the history buffer for this contact
+    char *fname = NULL;
+    int fd = -1;
+    // history directory (file descriptor)
+    int hdir_fd = -1;
+    // return values
+    int retval = -1; // indicate error if we return early
+
+    // get the filename
+    int ret = hist_file_from_contact(wc_dir, contact, contact_len, &fname);
+    if(ret != 0) FAIL(1);
+
+    // if no file was found, we'll have to create a new file
+    if(!fname){
+        fname = malloc(contact_len + 2);
+        if(!fname) FAIL(2);
+        memcpy(fname, contact, contact_len);
+        fname[contact_len] = ':';
+        fname[contact_len + 1] = '\0';
+    }
+
+    // get the history directory
+    ret = open_hist_dir(wc_dir, &hdir_fd, NULL);
+    if(ret) FAIL(3);
+
+    // open the file for appending
+    fd = openat(hdir_fd, fname, OPEN_WR_FLAGS);
+    if(fd < 0) FAIL(4);
+
+    // get the time
+    time_t t = time(NULL);
+    if(t == ((time_t)-1)) FAIL(5);
+
+    // append the message to the file
+    ret = dprintf(fd, "%ld:%d:%zu:%.*s\n",t, me, msg_len, (int)msg_len, msg);
+    if(ret < 0) FAIL(6);
+
+    // success!
+    retval = 0;
+
+fail:
+    if(fname) free(fname);
+    if(fd >= 0) close(fd);
+    if(hdir_fd >= 0) close(hdir_fd);
+    return retval;
+}
+

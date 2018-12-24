@@ -7,6 +7,8 @@
 
 extern struct t_weechat_plugin *weechat_plugin;
 extern struct t_gui_buffer* voip_buffer;
+// name of .weechat dir
+extern const char *wc_dir;
 
 int voip_plugin_send_sms(struct t_gui_buffer* buffer, const char* contact,
                          const char* msg);
