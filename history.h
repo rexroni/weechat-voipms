@@ -7,9 +7,9 @@
 
 // per-buffer history, (file name)
 typedef struct hist_buf_t {
-    // filename is of format "contact:[name]"
+    // filename is of format "<sip_uri>name"
     char* filename;
-    char* contact;
+    char* sip_uri;
     char* name;
     struct hist_buf_t* next;
 } hist_buf_t;
@@ -34,7 +34,7 @@ int list_hist_bufs(const char* wc_dir, hist_buf_t **out);
 int get_hist_msg(const char* wc_dir, const char* fname, hist_msg_t **out);
 
 // add a message to the history
-int hist_add_msg(const char* wc_dir, const char* contact, size_t contact_len,
+int hist_add_msg(const char* wc_dir, const char* sip_uri, const char* name,
                  const char* msg, size_t msg_len, bool me);
 
 #endif // HISTORY_H

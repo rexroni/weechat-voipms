@@ -46,8 +46,8 @@ void pager_cb(pjsua_call_id call_id,
     }
 }
 
-int sip_client_send_sms(const char* contact, const char* msg){
-    pj_str_t to = constify(contact, strlen(contact));
+int sip_client_send_sms(const char* sip_uri, const char* msg){
+    pj_str_t to = constify(sip_uri, strlen(sip_uri));
     pj_str_t mime = pj_str("text/plain");
     pj_str_t content = constify(msg, strlen(msg));
 

@@ -10,14 +10,14 @@ int main(){
     hist_msg_t *msg = NULL;
 
     // add a message to a file
-    int ret = hist_add_msg("testfiles", "1234567890", 10, "my added msg", 12, true);
+    int ret = hist_add_msg("testfiles", "123456789", "name", "my added msg", 12, true);
     if(ret){
         perror("hist_add_msg");
         printf("ret %d\n", ret);
         goto fail;
     }
 
-    ret = hist_add_msg("testfiles", "1234567890", 10, "their added msg", 15, false);
+    ret = hist_add_msg("testfiles", "123456789", "name", "their added msg", 15, false);
     if(ret){
         perror("hist_add_msg");
         printf("ret %d\n", ret);
@@ -36,7 +36,7 @@ int main(){
     printf("history files:\n");
     hist_buf_t *p, *next = hist;
     while( (p = next) ){
-        printf("  %s:%s\n", p->contact, p->name);
+        printf("  <%s>%s\n", p->sip_uri, p->name);
         // get all messages in this buffer
         hist_msg_t *msg;
         ret = get_hist_msg("testfiles", p->filename, &msg);
