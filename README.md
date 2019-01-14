@@ -23,6 +23,7 @@ send and recieve SMS messages through your VoIP.ms account.
 - Start new conversations with a WeeChat command: `/sms NUMBER message...`
 - WeeChat alerts when you receive a message
 - Builds and runs on Linux (MacOS possible but untested)
+- Persistent chat history with persistent buffer names
 
 ### Not yet implemented
 
